@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SI ↔ Imperial Converter — Flight Deck</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg-deep:    #050a0f;
+    --bg-panel:   #0a1520;
+    --bg-card:    #0d1c2e;
+    --bg-input:   #071018;
+    --border:     #1a3a55;
+    --border-glow:#0d6efd55;
+    --accent:     #00c8ff;
+    --accent2:    #ff6b35;
+    --accent3:    #39ff14;
+    --text-hi:    #e8f4ff;
+    --text-mid:   #7ab3cc;
+    --text-lo:    #3a6a88;
+    --formula-bg: #040d16;
+    --scan:       rgba(0,200,255,0.03);
+    --glow:       0 0 18px rgba(0,200,255,0.35);
+    --glow-sm:    0 0 8px rgba(0,200,255,0.25);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text-hi);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scan) 2px,
+      var(--scan) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ── Grid noise background ── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative; z-index: 10;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex; align-items: center; gap: 20px;
+    background: linear-gradient(180deg, #0a1a2e 0%, transparent 100%);
+    backdrop-filter: blur(4px);
+  }
+
+  .logo-icon {
+    width: 48px; height: 48px;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-shadow: var(--glow);
+    line-height: 1.2;
+  }
+
+  header h1 span { color: var(--text-mid); font-size: 0.75rem; display: block; font-weight: 400; letter-spacing: 0.2em; }
+
+  .header-right {
+    margin-left: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-lo);
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  .header-right .clock { color: var(--accent3); font-size: 0.85rem; }
+
+  /* ── Category tabs ── */
+  .tab-bar {
+    position: relative; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 16px 32px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+
+  .tab {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--text-lo);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    top: 1px;
+    white-space: nowrap;
+  }
+
+  .tab:hover { color: var(--text-mid); border-color: var(--border); }
+
+  .tab.active {
+    background: var(--bg-card);
+    color: var(--accent);
+    border-color: var(--border);
+    border-bottom-color: var(--bg-card);
+    text-shadow: var(--glow-sm);
+  }
+
+  .tab-icon { margin-right: 6px; opacity: 0.8; }
+
+  /* ── Main content ── */
+  main {
+    position: relative; z-index: 5;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  .panel { display: none; animation: fadeIn 0.3s ease; }
+  .panel.active { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Panel header ── */
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .panel-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
+
+  /* ── Converter card ── */
+  .converter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .converter-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .converter-card:hover { border-color: var(--border-glow); box-shadow: var(--glow); }
+  .converter-card:hover::before { opacity: 1; }
+
+  .conv-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--text-mid);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .conv-label .badge {
+    font-size: 0.55rem;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: rgba(0,200,255,0.1);
+    border: 1px solid rgba(0,200,255,0.3);
+    color: var(--accent);
+  }
+
+  /* ── Input row ── */
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .input-group { position: relative; }
+
+  .input-group label {
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-lo);
+    margin-bottom: 6px;
+    letter-spacing: 0.1em;
+  }
+
+  .input-group input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    color: var(--text-hi);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-group input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,200,255,0.15);
+  }
+
+  .input-group input.result-field {
+    color: var(--accent3);
+    border-color: rgba(57,255,20,0.2);
+    background: #040d08;
+  }
+
+  .arrow-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 1rem;
+    transition: all 0.2s;
+    align-self: flex-end;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .arrow-btn:hover {
+    background: rgba(0,200,255,0.1);
+    border-color: var(--accent);
+    box-shadow: var(--glow-sm);
+    transform: rotate(180deg);
+  }
+
+  /* ── Formula box ── */
+  .formula-box {
+    background: var(--formula-bg);
+    border: 1px solid #0d2a3d;
+    border-left: 2px solid var(--accent2);
+    border-radius: 0 4px 4px 0;
+    padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+    line-height: 1.6;
+  }
+
+  .formula-box .formula-title {
+    font-size: 0.58rem;
+    color: var(--text-lo);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* ── Temperature: special 3-column ── */
+  .temp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    header { padding: 12px 16px; }
+    header h1 { font-size: 1rem; }
+    .tab-bar { padding: 12px 12px 0; }
+    .tab { padding: 6px 10px; font-size: 0.55rem; }
+    main { padding: 20px 12px 48px; }
+    .input-row { grid-template-columns: 1fr; gap: 8px; }
+    .arrow-btn { display: none; }
+    .temp-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── Decorative corner brackets ── */
+  .converter-card .corner-tl,
+  .converter-card .corner-br {
+    position: absolute;
+    width: 12px; height: 12px;
+    opacity: 0.4;
+  }
+
+  .corner-tl { top: 8px; left: 8px; border-top: 1px solid var(--accent); border-left: 1px solid var(--accent); }
+  .corner-br { bottom: 8px; right: 8px; border-bottom: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+
+  /* ── Footer ── */
+  footer {
+    position: relative; z-index: 5;
+    text-align: center;
+    padding: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--text-lo);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Scroll bar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-mid);
+    outline: none;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  .unit-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-lo);
+    margin-top: 4px;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="24,4 44,36 4,36" stroke="#00c8ff" stroke-width="1.5" fill="none" opacity="0.6"/>
+    <polygon points="24,10 40,34 8,34" stroke="#00c8ff" stroke-width="0.5" fill="rgba(0,200,255,0.05)"/>
+    <line x1="24" y1="4" x2="24" y2="44" stroke="#00c8ff" stroke-width="0.5" opacity="0.3"/>
+    <circle cx="24" cy="24" r="4" stroke="#00c8ff" stroke-width="1" fill="rgba(0,200,255,0.2)"/>
+    <circle cx="24" cy="24" r="1.5" fill="#00c8ff"/>
+  </svg>
+  <div>
+    <h1>UNIT CONVERTER
+      <span>SI ↔ IMPERIAL MEASUREMENT SYSTEM</span>
+    </h1>
+  </div>
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div>FLIGHT DECK INSTRUMENTS</div>
+    <div>REV 4.2.1 // CALIBRATED</div>
+  </div>
+</header>
+
+<!-- ── TAB BAR ── -->
+<nav class="tab-bar" id="tabBar">
+  <button class="tab active" data-panel="lunghezza">
+    <span class="tab-icon">📏</span>LUNGHEZZA
+  </button>
+  <button class="tab" data-panel="massa">
+    <span class="tab-icon">⚖️</span>MASSA
+  </button>
+  <button class="tab" data-panel="forza">
+    <span class="tab-icon">⚡</span>FORZA
+  </button>
+  <button class="tab" data-panel="pressione">
+    <span class="tab-icon">🌡</span>PRESSIONE
+  </button>
+  <button class="tab" data-panel="velocita">
+    <span class="tab-icon">💨</span>VELOCITÀ
+  </button>
+  <button class="tab" data-panel="temperatura">
+    <span class="tab-icon">🔥</span>TEMPERATURA
+  </button>
+  <button class="tab" data-panel="potenza">
+    <span class="tab-icon">⚙️</span>POTENZA
+  </button>
+  <button class="tab" data-panel="area">
+    <span class="tab-icon">▦</span>AREA
+  </button>
+</nav>
+
+<!-- ── MAIN ── -->
+<main>
+
+  <!-- ══ LUNGHEZZA ══ -->
+  <div class="panel active" id="panel-lunghezza">
+    <div class="panel-title">◈ LENGTH / LUNGHEZZA</div>
+
+    <!-- metro ↔ piede -->
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Metro ↔ Piede <span class="badge">m / ft</span></div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>METRI [m]</label>
+          <input type="number" id="m_m" placeholder="0.000" oninput="conv('m_m','m_ft','*3.28084','÷3.28084')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('m_m','m_ft')">⇄</button>
+        <div class="input-group">
+          <label>PIEDI [ft]</label>
+          <input type="number" id="m_ft" class="result-field" placeholder="0.000" oninput="conv('m_ft','m_m','*0.3048','÷0.3048')">
+        </div>
+      </div>
+      <div class="formula-box">
+        <div class="formula-title">▸ formula</div>
+        ft = m × 3.28084 &nbsp;|&nbsp; m = ft × 0.3048
+      </div>
+    </div>
+
+    <!-- km ↔ miglia -->
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Chilometro ↔ Miglio <span class="badge">km / mi</span></div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>CHILOMETRI [km]</label>
+          <input type="number" id="km_km" placeholder="0.000" oninput="conv('km_km','km_mi','*0.621371','÷0.621371')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('km_km','km_mi')">⇄</button>
+        <div class="input-group">
+          <label>MIGLIA [mi]</label>
+          <input type="number" id="km_mi" class="result-field" placeholder="0.000" oninput="conv('km_mi','km_km','*1.60934','÷1.60934')">
+        </div>
+      </div>
+      <div class="formula-box">
+        <div class="formula-title">▸ formula</div>
+        mi = km × 0.621371 &nbsp;|&nbsp; km = mi × 1.60934
+      </div>
+    </div>
+
+    <!-- cm ↔ pollice -->
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Centimetro ↔ Pollice <span class="badge">cm / in</span></div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>CENTIMETRI [cm]</label>
+          <input type="number" id="cm_cm" placeholder="0.000" oninput="conv('cm_cm','cm_in','*0.393701','÷0.393701')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('cm_cm','cm_in')">⇄</button>
+        <div class="input-group">
+          <label>POLLICI [in]</label>
+          <input type="number" id="cm_in" class="result-field" placeholder="0.000" oninput="conv('cm_in','cm_cm','*2.54','÷2.54')">
+        </div>
+      </div>
+      <div class="formula-box">
+        <div class="formula-title">▸ formula</div>
+        in = cm × 0.393701 &nbsp;|&nbsp; cm = in × 2.54
+      </div>
+    </div>
+
+    <!-- m ↔ yard -->
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Metro ↔ Iarda <span class="badge">m / yd</span></div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>METRI [m]</label>
+          <input type="number" id="m2_m" placeholder="0.000" oninput="conv('m2_m','m2_yd','*1.09361','÷1.09361')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('m2_m','m2_yd')">⇄</button>
+        <div class="input-group">
+          <label>IARDE [yd]</label>
+          <input type="number" id="m2_yd" class="result-field" placeholder="0.000" oninput="conv('m2_yd','m2_m','*0.9144','÷0.9144')">
+        </div>
+      </div>
+      <div class="formula-box">
+        <div class="formula-title">▸ formula</div>
+        yd = m × 1.09361 &nbsp;|&nbsp; m = yd × 0.9144
+      </div>
+    </div>
+
+    <!-- km ↔ miglio nautico -->
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Chilometro ↔ Miglio Nautico <span class="badge">km / NM</span></div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>CHILOMETRI [km]</label>
+          <input type="number" id="kmnm_km" placeholder="0.000" oninput="conv('kmnm_km','kmnm_nm','*0.539957','÷0.539957')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kmnm_km','kmnm_nm')">⇄</button>
+        <div class="input-group">
+          <label>MIGLIA NAUTICHE [NM]</label>
+          <input type="number" id="kmnm_nm" class="result-field" placeholder="0.000" oninput="conv('kmnm_nm','kmnm_km','*1.852','÷1.852')">
+        </div>
+      </div>
+      <div class="formula-box">
+        <div class="formula-title">▸ formula</div>
+        NM = km × 0.539957 &nbsp;|&nbsp; km = NM × 1.852
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MASSA ══ -->
+  <div class="panel" id="panel-massa">
+    <div class="panel-title">◈ MASS / MASSA</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Chilogrammo ↔ Libbra <span class="badge">kg / lb</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CHILOGRAMMI [kg]</label>
+          <input type="number" id="kg_kg" placeholder="0.000" oninput="conv('kg_kg','kg_lb','*2.20462','÷2.20462')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kg_kg','kg_lb')">⇄</button>
+        <div class="input-group"><label>LIBBRE [lb]</label>
+          <input type="number" id="kg_lb" class="result-field" placeholder="0.000" oninput="conv('kg_lb','kg_kg','*0.453592','÷0.453592')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        lb = kg × 2.20462 &nbsp;|&nbsp; kg = lb × 0.453592
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Grammo ↔ Oncia <span class="badge">g / oz</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>GRAMMI [g]</label>
+          <input type="number" id="g_g" placeholder="0.000" oninput="conv('g_g','g_oz','*0.035274','÷0.035274')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('g_g','g_oz')">⇄</button>
+        <div class="input-group"><label>ONCE [oz]</label>
+          <input type="number" id="g_oz" class="result-field" placeholder="0.000" oninput="conv('g_oz','g_g','*28.3495','÷28.3495')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        oz = g × 0.035274 &nbsp;|&nbsp; g = oz × 28.3495
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Tonnellata (metrica) ↔ Tonnellata corta <span class="badge">t / US ton</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>TONNELLATE [t]</label>
+          <input type="number" id="t_t" placeholder="0.000" oninput="conv('t_t','t_ston','*1.10231','÷1.10231')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('t_t','t_ston')">⇄</button>
+        <div class="input-group"><label>TON USA [US ton]</label>
+          <input type="number" id="t_ston" class="result-field" placeholder="0.000" oninput="conv('t_ston','t_t','*0.907185','÷0.907185')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        US ton = t × 1.10231 &nbsp;|&nbsp; t = US ton × 0.907185
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Chilogrammo ↔ Stone <span class="badge">kg / st</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CHILOGRAMMI [kg]</label>
+          <input type="number" id="kgst_kg" placeholder="0.000" oninput="conv('kgst_kg','kgst_st','*0.157473','÷0.157473')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kgst_kg','kgst_st')">⇄</button>
+        <div class="input-group"><label>STONE [st]</label>
+          <input type="number" id="kgst_st" class="result-field" placeholder="0.000" oninput="conv('kgst_st','kgst_kg','*6.35029','÷6.35029')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        st = kg × 0.157473 &nbsp;|&nbsp; kg = st × 6.35029
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FORZA ══ -->
+  <div class="panel" id="panel-forza">
+    <div class="panel-title">◈ FORCE / FORZA</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Newton ↔ Libbra-forza <span class="badge">N / lbf</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>NEWTON [N]</label>
+          <input type="number" id="n_n" placeholder="0.000" oninput="conv('n_n','n_lbf','*0.224809','÷0.224809')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('n_n','n_lbf')">⇄</button>
+        <div class="input-group"><label>LIBBRE-FORZA [lbf]</label>
+          <input type="number" id="n_lbf" class="result-field" placeholder="0.000" oninput="conv('n_lbf','n_n','*4.44822','÷4.44822')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        lbf = N × 0.224809 &nbsp;|&nbsp; N = lbf × 4.44822
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Kilonewton ↔ Libbra-forza <span class="badge">kN / lbf</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>KILONEWTON [kN]</label>
+          <input type="number" id="kn_kn" placeholder="0.000" oninput="conv('kn_kn','kn_lbf','*224.809','÷224.809')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kn_kn','kn_lbf')">⇄</button>
+        <div class="input-group"><label>LIBBRE-FORZA [lbf]</label>
+          <input type="number" id="kn_lbf" class="result-field" placeholder="0.000" oninput="conv('kn_lbf','kn_kn','*0.00444822','÷0.00444822')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        lbf = kN × 224.809 &nbsp;|&nbsp; kN = lbf × 0.00444822
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Newton ↔ Chilogrammo-forza <span class="badge">N / kgf</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>NEWTON [N]</label>
+          <input type="number" id="nkgf_n" placeholder="0.000" oninput="conv('nkgf_n','nkgf_kgf','*0.101972','÷0.101972')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('nkgf_n','nkgf_kgf')">⇄</button>
+        <div class="input-group"><label>CHILOGRAMMO-FORZA [kgf]</label>
+          <input type="number" id="nkgf_kgf" class="result-field" placeholder="0.000" oninput="conv('nkgf_kgf','nkgf_n','*9.80665','÷9.80665')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        kgf = N × 0.101972 &nbsp;|&nbsp; N = kgf × 9.80665
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Newton ↔ Dyne <span class="badge">N / dyn</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>NEWTON [N]</label>
+          <input type="number" id="ndyn_n" placeholder="0.000" oninput="conv('ndyn_n','ndyn_dyn','*100000','÷100000')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('ndyn_n','ndyn_dyn')">⇄</button>
+        <div class="input-group"><label>DYNE [dyn]</label>
+          <input type="number" id="ndyn_dyn" class="result-field" placeholder="0.000" oninput="conv('ndyn_dyn','ndyn_n','*0.00001','÷0.00001')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        dyn = N × 100 000 &nbsp;|&nbsp; N = dyn × 10⁻⁵
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PRESSIONE ══ -->
+  <div class="panel" id="panel-pressione">
+    <div class="panel-title">◈ PRESSURE / PRESSIONE</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Pascal ↔ PSI <span class="badge">Pa / psi</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>PASCAL [Pa]</label>
+          <input type="number" id="pa_pa" placeholder="0.000" oninput="conv('pa_pa','pa_psi','*0.000145038','÷0.000145038')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('pa_pa','pa_psi')">⇄</button>
+        <div class="input-group"><label>PSI [psi]</label>
+          <input type="number" id="pa_psi" class="result-field" placeholder="0.000" oninput="conv('pa_psi','pa_pa','*6894.76','÷6894.76')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        psi = Pa × 1.45038 × 10⁻⁴ &nbsp;|&nbsp; Pa = psi × 6894.76
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Bar ↔ PSI <span class="badge">bar / psi</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>BAR [bar]</label>
+          <input type="number" id="bar_bar" placeholder="0.000" oninput="conv('bar_bar','bar_psi','*14.5038','÷14.5038')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('bar_bar','bar_psi')">⇄</button>
+        <div class="input-group"><label>PSI [psi]</label>
+          <input type="number" id="bar_psi" class="result-field" placeholder="0.000" oninput="conv('bar_psi','bar_bar','*0.0689476','÷0.0689476')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        psi = bar × 14.5038 &nbsp;|&nbsp; bar = psi × 0.0689476
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Atmosfera ↔ PSI <span class="badge">atm / psi</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>ATMOSFERE [atm]</label>
+          <input type="number" id="atm_atm" placeholder="0.000" oninput="conv('atm_atm','atm_psi','*14.6959','÷14.6959')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('atm_atm','atm_psi')">⇄</button>
+        <div class="input-group"><label>PSI [psi]</label>
+          <input type="number" id="atm_psi" class="result-field" placeholder="0.000" oninput="conv('atm_psi','atm_atm','*0.068046','÷0.068046')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        psi = atm × 14.6959 &nbsp;|&nbsp; atm = psi × 0.068046
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Millimetro Hg ↔ Pollice Hg <span class="badge">mmHg / inHg</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>MILLIMETRI Hg [mmHg]</label>
+          <input type="number" id="mmhg_mm" placeholder="0.000" oninput="conv('mmhg_mm','mmhg_in','*0.0393701','÷0.0393701')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('mmhg_mm','mmhg_in')">⇄</button>
+        <div class="input-group"><label>POLLICI Hg [inHg]</label>
+          <input type="number" id="mmhg_in" class="result-field" placeholder="0.000" oninput="conv('mmhg_in','mmhg_mm','*25.4','÷25.4')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        inHg = mmHg × 0.0393701 &nbsp;|&nbsp; mmHg = inHg × 25.4
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ VELOCITÀ ══ -->
+  <div class="panel" id="panel-velocita">
+    <div class="panel-title">◈ SPEED / VELOCITÀ</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">km/h ↔ mph <span class="badge">km/h / mph</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CHILOMETRI/ORA [km/h]</label>
+          <input type="number" id="kmh_kmh" placeholder="0.000" oninput="conv('kmh_kmh','kmh_mph','*0.621371','÷0.621371')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kmh_kmh','kmh_mph')">⇄</button>
+        <div class="input-group"><label>MIGLIA/ORA [mph]</label>
+          <input type="number" id="kmh_mph" class="result-field" placeholder="0.000" oninput="conv('kmh_mph','kmh_kmh','*1.60934','÷1.60934')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        mph = km/h × 0.621371 &nbsp;|&nbsp; km/h = mph × 1.60934
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">m/s ↔ ft/s <span class="badge">m/s / fps</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>METRI/SECONDO [m/s]</label>
+          <input type="number" id="ms_ms" placeholder="0.000" oninput="conv('ms_ms','ms_fps','*3.28084','÷3.28084')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('ms_ms','ms_fps')">⇄</button>
+        <div class="input-group"><label>PIEDI/SECONDO [fps]</label>
+          <input type="number" id="ms_fps" class="result-field" placeholder="0.000" oninput="conv('ms_fps','ms_ms','*0.3048','÷0.3048')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        fps = m/s × 3.28084 &nbsp;|&nbsp; m/s = fps × 0.3048
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Nodi ↔ km/h ↔ mph <span class="badge">kt / km/h / mph</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>NODI [kt]</label>
+          <input type="number" id="kt_kt" placeholder="0.000" oninput="ktConv()">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kt_kt','kt_kmh')">⇄</button>
+        <div class="input-group"><label>KM/H [km/h]</label>
+          <input type="number" id="kt_kmh" class="result-field" placeholder="0.000" oninput="ktConvFrom('kmh')">
+        </div>
+      </div>
+      <div class="input-row" style="margin-top:8px">
+        <div class="input-group"><label>MIGLIA/ORA [mph]</label>
+          <input type="number" id="kt_mph" class="result-field" placeholder="0.000" oninput="ktConvFrom('mph')">
+        </div>
+        <div style="width:40px"></div>
+        <div class="input-group"><label>METRI/SEC [m/s]</label>
+          <input type="number" id="kt_ms" class="result-field" placeholder="0.000" oninput="ktConvFrom('ms')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        1 kt = 1.852 km/h = 1.15078 mph = 0.514444 m/s
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Mach ↔ km/h <span class="badge">Ma / km/h</span> <span style="font-size:0.6rem;color:var(--text-lo)">(ISA, livello del mare, 15°C)</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>MACH [Ma]</label>
+          <input type="number" id="mach_ma" placeholder="0.000" oninput="conv('mach_ma','mach_kmh','*1234.8','÷1234.8')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('mach_ma','mach_kmh')">⇄</button>
+        <div class="input-group"><label>KM/H [km/h]</label>
+          <input type="number" id="mach_kmh" class="result-field" placeholder="0.000" oninput="conv('mach_kmh','mach_ma','*0.000809848','÷0.000809848')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        km/h = Mach × 1234.8 &nbsp;|&nbsp; Mach = km/h ÷ 1234.8 &nbsp; (v_sound ≈ 340.3 m/s @ 15°C)
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TEMPERATURA ══ -->
+  <div class="panel" id="panel-temperatura">
+    <div class="panel-title">◈ TEMPERATURE / TEMPERATURA</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Celsius ↔ Fahrenheit ↔ Kelvin <span class="badge">°C / °F / K</span></div>
+      <div class="temp-grid">
+        <div class="input-group"><label>CELSIUS [°C]</label>
+          <input type="number" id="t_c" placeholder="0.000" oninput="tempConvFrom('c')">
+        </div>
+        <div class="input-group"><label>FAHRENHEIT [°F]</label>
+          <input type="number" id="t_f" class="result-field" placeholder="0.000" oninput="tempConvFrom('f')">
+        </div>
+        <div class="input-group"><label>KELVIN [K]</label>
+          <input type="number" id="t_k" class="result-field" placeholder="0.000" oninput="tempConvFrom('k')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        °F = (°C × 9/5) + 32 &nbsp;|&nbsp; °C = (°F − 32) × 5/9 &nbsp;|&nbsp; K = °C + 273.15
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Celsius ↔ Rankine <span class="badge">°C / °R</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CELSIUS [°C]</label>
+          <input type="number" id="cr_c" placeholder="0.000" oninput="conv_rankine()">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('cr_c','cr_r')">⇄</button>
+        <div class="input-group"><label>RANKINE [°R]</label>
+          <input type="number" id="cr_r" class="result-field" placeholder="0.000" oninput="conv_rankine_rev()">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        °R = (°C + 273.15) × 9/5 &nbsp;|&nbsp; °C = (°R × 5/9) − 273.15
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ POTENZA ══ -->
+  <div class="panel" id="panel-potenza">
+    <div class="panel-title">◈ POWER / POTENZA</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Watt ↔ Cavalli Vapore <span class="badge">W / hp</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>WATT [W]</label>
+          <input type="number" id="w_w" placeholder="0.000" oninput="conv('w_w','w_hp','*0.00134102','÷0.00134102')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('w_w','w_hp')">⇄</button>
+        <div class="input-group"><label>CAVALLI [hp]</label>
+          <input type="number" id="w_hp" class="result-field" placeholder="0.000" oninput="conv('w_hp','w_w','*745.7','÷745.7')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        hp = W × 0.00134102 &nbsp;|&nbsp; W = hp × 745.7
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Kilowatt ↔ Cavalli Vapore <span class="badge">kW / hp</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>KILOWATT [kW]</label>
+          <input type="number" id="kw_kw" placeholder="0.000" oninput="conv('kw_kw','kw_hp','*1.34102','÷1.34102')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kw_kw','kw_hp')">⇄</button>
+        <div class="input-group"><label>CAVALLI [hp]</label>
+          <input type="number" id="kw_hp" class="result-field" placeholder="0.000" oninput="conv('kw_hp','kw_kw','*0.7457','÷0.7457')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        hp = kW × 1.34102 &nbsp;|&nbsp; kW = hp × 0.7457
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Watt ↔ BTU/h <span class="badge">W / BTU/h</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>WATT [W]</label>
+          <input type="number" id="wbtu_w" placeholder="0.000" oninput="conv('wbtu_w','wbtu_btu','*3.41214','÷3.41214')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('wbtu_w','wbtu_btu')">⇄</button>
+        <div class="input-group"><label>BTU/ORA [BTU/h]</label>
+          <input type="number" id="wbtu_btu" class="result-field" placeholder="0.000" oninput="conv('wbtu_btu','wbtu_w','*0.293071','÷0.293071')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        BTU/h = W × 3.41214 &nbsp;|&nbsp; W = BTU/h × 0.293071
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Kilowatt ↔ CV (Cavallo Vapore metrico) <span class="badge">kW / CV</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>KILOWATT [kW]</label>
+          <input type="number" id="kw2_kw" placeholder="0.000" oninput="conv('kw2_kw','kw2_cv','*1.35962','÷1.35962')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('kw2_kw','kw2_cv')">⇄</button>
+        <div class="input-group"><label>CV METRICO [CV]</label>
+          <input type="number" id="kw2_cv" class="result-field" placeholder="0.000" oninput="conv('kw2_cv','kw2_kw','*0.73549','÷0.73549')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        CV = kW × 1.35962 &nbsp;|&nbsp; kW = CV × 0.73549 &nbsp; (1 CV = 75 kgf·m/s = 735.499 W)
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ AREA ══ -->
+  <div class="panel" id="panel-area">
+    <div class="panel-title">◈ AREA / SUPERFICIE</div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Metro² ↔ Piede² <span class="badge">m² / ft²</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>METRI QUADRI [m²]</label>
+          <input type="number" id="m2_m2" placeholder="0.000" oninput="conv('m2_m2','m2_ft2','*10.7639','÷10.7639')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('m2_m2','m2_ft2')">⇄</button>
+        <div class="input-group"><label>PIEDI QUADRI [ft²]</label>
+          <input type="number" id="m2_ft2" class="result-field" placeholder="0.000" oninput="conv('m2_ft2','m2_m2','*0.092903','÷0.092903')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        ft² = m² × 10.7639 &nbsp;|&nbsp; m² = ft² × 0.092903
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">Ettaro ↔ Acro <span class="badge">ha / ac</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>ETTARI [ha]</label>
+          <input type="number" id="ha_ha" placeholder="0.000" oninput="conv('ha_ha','ha_ac','*2.47105','÷2.47105')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('ha_ha','ha_ac')">⇄</button>
+        <div class="input-group"><label>ACRI [ac]</label>
+          <input type="number" id="ha_ac" class="result-field" placeholder="0.000" oninput="conv('ha_ac','ha_ha','*0.404686','÷0.404686')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        ac = ha × 2.47105 &nbsp;|&nbsp; ha = ac × 0.404686
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">km² ↔ Miglio² <span class="badge">km² / mi²</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CHILOMETRI QUADRI [km²]</label>
+          <input type="number" id="km2_km2" placeholder="0.000" oninput="conv('km2_km2','km2_mi2','*0.386102','÷0.386102')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('km2_km2','km2_mi2')">⇄</button>
+        <div class="input-group"><label>MIGLIA QUADRE [mi²]</label>
+          <input type="number" id="km2_mi2" class="result-field" placeholder="0.000" oninput="conv('km2_mi2','km2_km2','*2.58999','÷2.58999')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        mi² = km² × 0.386102 &nbsp;|&nbsp; km² = mi² × 2.58999
+      </div>
+    </div>
+
+    <div class="converter-card">
+      <div class="corner-tl"></div><div class="corner-br"></div>
+      <div class="conv-label">cm² ↔ Pollice² <span class="badge">cm² / in²</span></div>
+      <div class="input-row">
+        <div class="input-group"><label>CENTIMETRI QUADRI [cm²]</label>
+          <input type="number" id="cm2_cm2" placeholder="0.000" oninput="conv('cm2_cm2','cm2_in2','*0.155','÷0.155')">
+        </div>
+        <button class="arrow-btn" onclick="swapFocus('cm2_cm2','cm2_in2')">⇄</button>
+        <div class="input-group"><label>POLLICI QUADRI [in²]</label>
+          <input type="number" id="cm2_in2" class="result-field" placeholder="0.000" oninput="conv('cm2_in2','cm2_cm2','*6.4516','÷6.4516')">
+        </div>
+      </div>
+      <div class="formula-box"><div class="formula-title">▸ formula</div>
+        in² = cm² × 0.155 &nbsp;|&nbsp; cm² = in² × 6.4516
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  UNIT CONVERTER // FLIGHT DECK REV 4.2.1 &nbsp;·&nbsp; TUTTI I VALORI SONO ESATTI ALLE CIFRE SIGNIFICATIVE INDICATE &nbsp;·&nbsp; USO PROFESSIONALE AUTORIZZATO
+</footer>
+
+<script>
+  // ── Clock ──
+  function updateClock() {
+    const n = new Date();
+    document.getElementById('clock').textContent =
+      n.toUTCString().slice(17,25) + ' UTC';
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── Tab switching ──
+  document.getElementById('tabBar').addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+  });
+
+  // ── Generic converter ──
+  // formulaFwd is like '*3.28084', formulaRev is like '÷3.28084'
+  function conv(srcId, dstId, formulaFwd, formulaRev) {
+    const v = parseFloat(document.getElementById(srcId).value);
+    const dst = document.getElementById(dstId);
+    if (isNaN(v)) { dst.value = ''; return; }
+    const factor = parseFloat(formulaFwd.replace('*','').replace('÷',''));
+    const result = formulaFwd.startsWith('*') ? v * factor : v / factor;
+    dst.value = +result.toPrecision(8);
+  }
+
+  // ── Swap focus ──
+  function swapFocus(aId, bId) {
+    const a = document.getElementById(aId);
+    const b = document.getElementById(bId);
+    // swap class
+    a.classList.toggle('result-field');
+    b.classList.toggle('result-field');
+    b.focus();
+  }
+
+  // ── Temperature ──
+  function tempConvFrom(from) {
+    let c, f, k;
+    if (from === 'c') {
+      c = parseFloat(document.getElementById('t_c').value);
+      if (isNaN(c)) { document.getElementById('t_f').value=''; document.getElementById('t_k').value=''; return; }
+      f = c * 9/5 + 32;
+      k = c + 273.15;
+      document.getElementById('t_f').value = +f.toPrecision(8);
+      document.getElementById('t_k').value = +k.toPrecision(8);
+    } else if (from === 'f') {
+      f = parseFloat(document.getElementById('t_f').value);
+      if (isNaN(f)) { document.getElementById('t_c').value=''; document.getElementById('t_k').value=''; return; }
+      c = (f - 32) * 5/9;
+      k = c + 273.15;
+      document.getElementById('t_c').value = +c.toPrecision(8);
+      document.getElementById('t_k').value = +k.toPrecision(8);
+    } else {
+      k = parseFloat(document.getElementById('t_k').value);
+      if (isNaN(k)) { document.getElementById('t_c').value=''; document.getElementById('t_f').value=''; return; }
+      c = k - 273.15;
+      f = c * 9/5 + 32;
+      document.getElementById('t_c').value = +c.toPrecision(8);
+      document.getElementById('t_f').value = +f.toPrecision(8);
+    }
+  }
+
+  function conv_rankine() {
+    const c = parseFloat(document.getElementById('cr_c').value);
+    if (isNaN(c)) { document.getElementById('cr_r').value=''; return; }
+    document.getElementById('cr_r').value = +((c + 273.15) * 9/5).toPrecision(8);
+  }
+  function conv_rankine_rev() {
+    const r = parseFloat(document.getElementById('cr_r').value);
+    if (isNaN(r)) { document.getElementById('cr_c').value=''; return; }
+    document.getElementById('cr_c').value = +((r * 5/9) - 273.15).toPrecision(8);
+  }
+
+  // ── Knots multi-conv ──
+  function ktConv() {
+    const kt = parseFloat(document.getElementById('kt_kt').value);
+    if (isNaN(kt)) {
+      ['kt_kmh','kt_mph','kt_ms'].forEach(id => document.getElementById(id).value='');
+      return;
+    }
+    document.getElementById('kt_kmh').value = +(kt * 1.852).toPrecision(8);
+    document.getElementById('kt_mph').value = +(kt * 1.15078).toPrecision(8);
+    document.getElementById('kt_ms').value  = +(kt * 0.514444).toPrecision(8);
+  }
+  function ktConvFrom(unit) {
+    let kt;
+    if (unit === 'kmh') kt = parseFloat(document.getElementById('kt_kmh').value) / 1.852;
+    else if (unit === 'mph') kt = parseFloat(document.getElementById('kt_mph').value) / 1.15078;
+    else kt = parseFloat(document.getElementById('kt_ms').value) / 0.514444;
+    if (isNaN(kt)) return;
+    document.getElementById('kt_kt').value  = +(kt).toPrecision(8);
+    document.getElementById('kt_kmh').value = +(kt * 1.852).toPrecision(8);
+    document.getElementById('kt_mph').value = +(kt * 1.15078).toPrecision(8);
+    document.getElementById('kt_ms').value  = +(kt * 0.514444).toPrecision(8);
+  }
+</script>
+</body>
+</html>
